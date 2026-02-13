@@ -22,8 +22,8 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
     private String imposterName;
     private ScheduledExecutorService scheduler;
     private Timer turnTimer;
-    private final String[] WORDS = {"apple", "banana", "orange", "grape", "mango", "cat", "dog", "bird", "fish", "car"};
-    private final String[] HINTS = {"fruit", "fruit", "fruit", "fruit", "fruit", "animal", "animal", "animal", "animal", "vehicle"};
+    private final String[] WORDS = {"tower", "chalk", "school", "ice-cream", "rainbow", "sky", "storm", "carrot", "turtle", "wheel"};
+    private final String[] HINTS = {"high", "white", "kids", "cold", "colors", "blue", "dangerous", "bird", "slow", "black"};
 
 
     protected ImposterGameImpl() throws RemoteException {
@@ -52,7 +52,7 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
         players.add(newPlayer);
         clientMap.put(playerName, client);
         broadcastGameState();
-        return false;
+        return true;
     }
 
     @Override
@@ -69,15 +69,16 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
         imposterName = players.get(imposterIndex).getName();
 
         // Distribute words
-        String word = WORDS[rand.nextInt(WORDS.length)];
-        String hint = WORDS[rand.nextInt(HINTS.length)];
+        int index = rand.nextInt(WORDS.length);
+        String word = WORDS[index];
+        String hint = HINTS[index];
 
         try {
             for (Player p : players) {
                 p.setImposter(p.getName().equals(imposterName));
                 if (p.isImposter()) {
                     p.setWord(word);
-                    p.setHint("Hint: " + hint);
+                    p.setHint(hint);
                 } else {
                     p.setWord(word);
                     p.setHint(hint);
