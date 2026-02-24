@@ -67,7 +67,7 @@ public class GameServerUI extends JFrame {
         stopButton.addActionListener(e -> stopServer());
         gbc.gridx = 1;
         gbc.insets = new Insets(10, 5, 0, 0);
-        topPanel.add(stopButton, gbc);
+//        topPanel.add(stopButton, gbc);
 
         add(topPanel, BorderLayout.NORTH);
 

@@ -22,6 +22,9 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
     private String imposterName;
     private ScheduledExecutorService scheduler;
     private Timer turnTimer;
+    private Timer votingTimer;
+    private Set<String> votedPlayers;
+    private boolean votingComplete;
     private final String[] WORDS = {"tower", "chalk", "school", "ice-cream", "rainbow", "sky", "storm", "carrot", "turtle", "wheel"};
     private final String[] HINTS = {"high", "white", "kids", "cold", "colors", "blue", "dangerous", "bird", "slow", "black"};
 
@@ -33,6 +36,7 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
         this.currentState = GameState.WAITING_FOR_PLAYERS;
         this.currentRound = 0;
         this.scheduler = Executors.newScheduledThreadPool(0);
+        this.votedPlayers = Collections.synchronizedSet(new HashSet<>());
     }
 
     @Override
@@ -196,20 +200,95 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
         try {
             currentState = GameState.VOTING;
             broadcastGameState();
+            votingComplete = false;
 
             // Reset votes
             for (Player p : players) {
                 p.setVotes(0);
             }
 
-            // Give players 30 seconds to vote
-            scheduler.schedule(this::calculateResult, 30, TimeUnit.SECONDS);
+            // Start voting timer for 30 seconds
+            startVotingTimer(30);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private synchronized void calculateResult() {
+    private void startVotingTimer(int seconds) {
+        if (votingTimer != null) {
+            votingTimer.cancel();
+        }
+
+        votingTimer = new Timer();
+        votingTimer.schedule(new TimerTask() {
+            int timeLeft = seconds;
+
+            @Override
+            public void run() {
+                try {
+                    if (votingComplete) {
+                        return;
+                    }
+
+                    timeLeft--;
+
+                    // Update timer for all clients
+                    for (GameClientInterface client : clientMap.values()) {
+                        client.updateVotingTimer(timeLeft);
+                    }
+
+                    if (timeLeft <= 0 || votingComplete) {
+                        votingTimer.cancel();
+                        if (!votingComplete) {
+                            calculateResults();
+                        }
+                    }
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 0, 1000);
+    }
+
+    @Override
+    public synchronized void submitVote(String playerName, String votedPlayer) throws RemoteException {
+        if (currentState != GameState.VOTING || votingComplete) {
+            return;
+        }
+
+        // Check if player already voted
+        if (votedPlayers.contains(playerName)) {
+            return;
+        }
+
+        // Record vote
+        for (Player p : players) {
+            if (p.getName().equals(votedPlayer)) {
+                p.addVote();
+                break;
+            }
+        }
+
+        votedPlayers.add(playerName);
+
+        // Notify client that vote was recorded
+        GameClientInterface client = clientMap.get(playerName);
+        if (client != null) {
+            client.voteRecorded();
+        }
+
+        // Check if all players have voted
+        if (votedPlayers.size() >= players.size()) {
+            votingComplete = true;
+            if (votingTimer != null) {
+                votingTimer.cancel();
+            }
+            calculateResults();
+        }
+    }
+
+
+    private synchronized void calculateResults() {
         try {
             currentState = GameState.RESULT;
 
@@ -224,13 +303,31 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
                 }
             }
 
-            boolean imposterCaught = votedPlayer != null && votedPlayer.isImposter();
+            // Handle tie a breaker (if multiple players have same votes, no one is eliminated)
+            int voteCount = 0;
+            for (Player p : players) {
+                if (p.getVotes() == maxVote) {
+                    voteCount++;
+                }
+            }
+            boolean imposterCaught = false;
+            if (voteCount == 1 && votedPlayer != null) {
+                imposterCaught = votedPlayer.isImposter();
+            }
 
             // Send results to each player
             for (Player p : players) {
                 GameClientInterface client = clientMap.get(p.getName());
                 if (client != null) {
-                    client.showVotingResult(imposterName, imposterCaught ? !p.isImposter() : p.isImposter());
+                    String resultMessage;
+                    if (voteCount > 1) {
+                        resultMessage = "It's a tie! No one was eliminated.\nThe imposter was: " + imposterName;
+                    } else {
+                        resultMessage = "Most voted: " + (votedPlayer != null ? votedPlayer.getName() : "None") +
+                                "\nThe imposter was: " + imposterName;
+
+                    }
+                    client.showVotingResult(imposterName, imposterCaught ? !p.isImposter() : p.isImposter(), resultMessage);
                 }
             }
             currentState = GameState.GAME_OVER;
@@ -241,20 +338,12 @@ public class ImposterGameImpl extends UnicastRemoteObject implements GameInterfa
     }
 
     @Override
-    public void submitVote(String playerName, String votedPlayer) throws RemoteException {
-        for (Player p : players) {
-            if (p.getName().equals(votedPlayer)) {
-                p.addVote();
-                break;
-            }
-        }
-    }
-
-    @Override
     public void replayGame() throws RemoteException {
         // Reset game state
         currentRound = 0;
         currentState = GameState.WAITING_FOR_PLAYERS;
+        votedPlayers.clear();
+        votingComplete=false;
 
         // Reset players
         for (Player p : players) {

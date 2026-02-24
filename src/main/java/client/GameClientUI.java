@@ -17,7 +17,7 @@ public class GameClientUI extends JFrame {
     private JTextField nameField;
     private JButton connectButton;
     private JButton registerButton;
-//    private JButton startGameButton;
+    //    private JButton startGameButton;
     private JButton sendButton;
     private JButton voteButton;
     private JButton replayButton;
@@ -27,9 +27,12 @@ public class GameClientUI extends JFrame {
     private JLabel turnLabel;
     private JLabel timerLabel;
     private JLabel wordLabel;
+    private JLabel votingTimerLabel;
     private JList<String> playerList;
     private DefaultListModel<String> playerListModel;
     private JComboBox<String> voteComboBox;
+    private JProgressBar votingProgressBar;
+    private JLabel votedStatusLabel;
 
     private GameInterface server;
     private GameClientImpl client;
@@ -37,6 +40,7 @@ public class GameClientUI extends JFrame {
     private GameState currentState;
     private java.util.Timer turnTimer;
     private int timeLeft;
+    private boolean hasVoted;
 
     public GameClientUI() {
         initComponents();
@@ -107,6 +111,12 @@ public class GameClientUI extends JFrame {
         infoPanel.add(timerLabel);
         leftPanel.add(infoPanel, BorderLayout.SOUTH);
 
+        // Voting timer (initially hidden)
+        votingTimerLabel = new JLabel("", SwingConstants.CENTER);
+        votingTimerLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        votingTimerLabel.setForeground(new Color(150, 0, 0));
+        votingTimerLabel.setVisible(false);
+
         // Right Panel - Chatting and Voting
         JPanel rightPanel = new JPanel(new BorderLayout(5, 5));
         rightPanel.setBorder(BorderFactory.createTitledBorder(
@@ -136,15 +146,36 @@ public class GameClientUI extends JFrame {
         rightPanel.add(messagePanel, BorderLayout.SOUTH);
 
         // Voting Panel
-        JPanel votingPanel = new JPanel(new FlowLayout());
+        // Voting Panel - Enhanced
+        JPanel votingPanel = new JPanel();
+        votingPanel.setLayout(new BoxLayout(votingPanel, BoxLayout.Y_AXIS));
         votingPanel.setBorder(BorderFactory.createTitledBorder("Voting"));
+
+        // Vote selection
+        JPanel voteSelectionPanel = new JPanel(new FlowLayout());
         voteComboBox = new JComboBox<>();
         voteComboBox.setEnabled(false);
         voteButton = new JButton("Vote");
         voteButton.setEnabled(false);
         voteButton.addActionListener(e -> submitVote());
-        votingPanel.add(voteComboBox);
-        votingPanel.add(voteButton);
+        voteSelectionPanel.add(voteComboBox);
+        voteSelectionPanel.add(voteButton);
+
+        // Voting progress
+        JPanel progressPanel = new JPanel(new BorderLayout(5, 5));
+        votingProgressBar = new JProgressBar(0, 100);
+        votingProgressBar.setStringPainted(true);
+        votingProgressBar.setVisible(false);
+        votedStatusLabel = new JLabel("", SwingConstants.CENTER);
+        votedStatusLabel.setFont(new Font("Arial", Font.ITALIC, 11));
+
+        progressPanel.add(votingProgressBar, BorderLayout.CENTER);
+        progressPanel.add(votedStatusLabel, BorderLayout.SOUTH);
+
+        votingPanel.add(voteSelectionPanel);
+        votingPanel.add(Box.createVerticalStrut(5));
+        votingPanel.add(progressPanel);
+
         rightPanel.add(votingPanel, BorderLayout.NORTH);
 
         splitPane.setLeftComponent(leftPanel);
@@ -152,6 +183,7 @@ public class GameClientUI extends JFrame {
         splitPane.setDividerLocation(300);
 
         add(splitPane, BorderLayout.CENTER);
+
 
         // Bottom Panel - Game Control
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -254,9 +286,9 @@ public class GameClientUI extends JFrame {
         if (votedPlayer != null && !votedPlayer.equals(playerName)) {
             try {
                 server.submitVote(playerName, votedPlayer);
-                voteButton.setEnabled(false);
-                voteComboBox.setEnabled(false);
-                appendChat("System: You voted for " + votedPlayer);
+//                voteButton.setEnabled(false);
+//                voteComboBox.setEnabled(false);
+//                appendChat("System: You voted for " + votedPlayer);
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
@@ -322,18 +354,47 @@ public class GameClientUI extends JFrame {
         });
     }
 
+    public void updateVotingTimer(int timeLeft) {
+        SwingUtilities.invokeLater(() -> {
+            votingTimerLabel.setText("Voting time left: " + timeLeft + "s");
+            votingTimerLabel.setVisible(true);
+
+            // Update progress bar
+            int progress = (int) ((30 - timeLeft) * 100.0 / 30);
+            votingProgressBar.setValue(progress);
+            votingProgressBar.setString(timeLeft + "s remaining");
+        });
+    }
+
+    public void voteRecorded() {
+        SwingUtilities.invokeLater(() -> {
+            hasVoted = true;
+            voteButton.setEnabled(false);
+            voteComboBox.setEnabled(false);
+            votedStatusLabel.setText("✓ Your vote has been recorded!");
+            votedStatusLabel.setForeground(new Color(0, 150, 0));
+
+            // Update progress bar to show you've voted
+            votingProgressBar.setString("Vote recorded - waiting for others");
+        });
+    }
+
     public void updateGameState(GameState state) {
         this.currentState = state;
         SwingUtilities.invokeLater(() -> {
             switch (state) {
                 case WAITING_FOR_PLAYERS:
                     setTitle("Imposter Game - Waiting for Players");
+                    votingTimerLabel.setVisible(false);
+                    votingProgressBar.setVisible(false);
+                    votedStatusLabel.setText("");
                     break;
                 case WORD_DISTRIBUTION:
                     setTitle("Imposter Game - Game Starting...");
                     break;
                 case ROUND_1:
                     setTitle("Imposter Game - Round 1");
+                    votingTimerLabel.setVisible(false);
                     break;
                 case ROUND_2:
                     setTitle("Imposter Game - Round 2");
@@ -344,9 +405,16 @@ public class GameClientUI extends JFrame {
                 case VOTING:
                     setTitle("Imposter Game - Voting");
                     enableVoting();
+                    votingTimerLabel.setVisible(true);
+                    votingProgressBar.setVisible(true);
+                    votingProgressBar.setValue(0);
+                    hasVoted = false;
                     break;
                 case GAME_OVER:
                     setTitle("Imposter Game - Game Over");
+                    votingTimerLabel.setVisible(false);
+                    votingProgressBar.setVisible(false);
+                    disableVoting();
                     break;
             }
 
@@ -364,13 +432,22 @@ public class GameClientUI extends JFrame {
                         voteComboBox.addItem(p.getName());
                     }
                 }
-                voteComboBox.setEnabled(true);
-                voteButton.setEnabled(true);
+                if (voteComboBox.getItemCount() > 0) {
+                    voteComboBox.setEnabled(true);
+                    voteButton.setEnabled(true);
+                }
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
         });
 
+    }
+
+    private void disableVoting() {
+        voteComboBox.setEnabled(false);
+        voteButton.setEnabled(false);
+        votingTimerLabel.setVisible(false);
+        votingProgressBar.setVisible(false);
     }
 
     private void updatePlayerList() {
@@ -429,6 +506,9 @@ public class GameClientUI extends JFrame {
 //            startGameButton.setEnabled(true);
             turnLabel.setText("Not your turn");
             timerLabel.setText("");
+            votingTimerLabel.setVisible(false);
+            votingProgressBar.setVisible(false);
+            votedStatusLabel.setText("");
         });
     }
 
