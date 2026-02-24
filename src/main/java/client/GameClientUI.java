@@ -17,7 +17,7 @@ public class GameClientUI extends JFrame {
     private JTextField nameField;
     private JButton connectButton;
     private JButton registerButton;
-    private JButton startGameButton;
+//    private JButton startGameButton;
     private JButton sendButton;
     private JButton voteButton;
     private JButton replayButton;
@@ -157,15 +157,15 @@ public class GameClientUI extends JFrame {
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         bottomPanel.setBorder(BorderFactory.createEtchedBorder());
 
-        startGameButton = new JButton("Start Game");
-        startGameButton.setEnabled(false);
-        startGameButton.addActionListener(e -> startGame());
+//        startGameButton = new JButton("Start Game");
+//        startGameButton.setEnabled(false);
+//        startGameButton.addActionListener(e -> startGame());
 
         replayButton = new JButton("Play Again");
         replayButton.setEnabled(false);
         replayButton.addActionListener(e -> replayGame());
 
-        bottomPanel.add(startGameButton);
+//        bottomPanel.add(startGameButton);
         bottomPanel.add(replayButton);
 
         add(bottomPanel, BorderLayout.SOUTH);
@@ -210,7 +210,7 @@ public class GameClientUI extends JFrame {
                 statusLabel.setText("Status: Registered as " + playerName);
                 registerButton.setEnabled(false);
                 nameField.setEnabled(false);
-                startGameButton.setEnabled(true);
+//                startGameButton.setEnabled(true);
                 appendChat("System: Successfully registered as " + playerName);
                 updatePlayerList();
             } else {
@@ -227,15 +227,15 @@ public class GameClientUI extends JFrame {
         }
     }
 
-    private void startGame() {
-        try {
-            server.startGame();
-            startGameButton.setEnabled(false);
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
-
-    }
+//    private void startGame() {
+//        try {
+//            server.startGame();
+//            startGameButton.setEnabled(false);
+//        } catch (RemoteException e) {
+//            e.printStackTrace();
+//        }
+//
+//    }
 
     private void sendMessage() {
         String message = messageField.getText().trim();
@@ -426,7 +426,7 @@ public class GameClientUI extends JFrame {
             voteComboBox.setEnabled(false);
             voteButton.setEnabled(false);
             replayButton.setEnabled(false);
-            startGameButton.setEnabled(true);
+//            startGameButton.setEnabled(true);
             turnLabel.setText("Not your turn");
             timerLabel.setText("");
         });
